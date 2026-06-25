@@ -1,5 +1,7 @@
 # aws-hygiene-auditor
 
+<img src="docs/assets/aws-hygiene-auditor-mascot.png" alt="AWS Hygiene Auditor mascot" width="240">
+
 `aws-hygiene-auditor` is a small Python CLI that scans an AWS account for common security,
 cost, and governance hygiene issues.
 
