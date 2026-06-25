@@ -1,6 +1,16 @@
 # aws-hygiene-auditor
 
-<img src="docs/assets/aws-hygiene-auditor-mascot.png" alt="AWS Hygiene Auditor mascot" width="240">
+<p align="center">
+  <img src="docs/assets/aws-hygiene-auditor-mascot.png" alt="AWS Hygiene Auditor mascot" width="320">
+</p>
+
+<p align="center">
+  <a href="https://github.com/mstrugarevic1/aws-hygiene-auditor/actions/workflows/test.yml"><img alt="Tests" src="https://github.com/mstrugarevic1/aws-hygiene-auditor/actions/workflows/test.yml/badge.svg"></a>
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-blue">
+  <img alt="pytest" src="https://img.shields.io/badge/tests-pytest-green">
+  <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-green">
+  <img alt="AI assisted with Codex" src="https://img.shields.io/badge/AI_assisted-Codex-111827">
+</p>
 
 `aws-hygiene-auditor` is a small Python CLI that scans an AWS account for common security,
 cost, and governance hygiene issues.
@@ -148,3 +158,7 @@ pytest
 ```
 
 CI runs those commands without AWS credentials and without integration tests against a real account.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
