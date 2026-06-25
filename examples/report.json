@@ -1,0 +1,28 @@
+{
+  "account_id": "123456789012",
+  "arn": "arn:aws:iam::123456789012:role/AwsHygieneAuditorReadOnly",
+  "profile": null,
+  "assumed_role": "arn:aws:iam::123456789012:role/AwsHygieneAuditorReadOnly",
+  "regions": ["us-east-1", "eu-central-1"],
+  "findings": [
+    {
+      "severity": "HIGH",
+      "check_id": "EC2_SG_OPEN_SSH",
+      "service": "EC2",
+      "region": "eu-central-1",
+      "resource_id": "sg-012345",
+      "title": "SSH open to the world",
+      "description": "Security group allows ingress from the internet on port 22.",
+      "recommendation": "Restrict ingress to trusted CIDR ranges or remove the rule."
+    }
+  ],
+  "errors": [],
+  "summary": {
+    "scanned_regions": 2,
+    "checks_executed": 12,
+    "resources_inspected": 42,
+    "errors": 0,
+    "duration_seconds": 3.2
+  }
+}
+
