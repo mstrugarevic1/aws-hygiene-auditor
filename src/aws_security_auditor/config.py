@@ -5,6 +5,20 @@ from dataclasses import dataclass
 from botocore.config import Config
 
 DEFAULT_REQUIRED_TAGS = ("Owner", "Environment", "CostCenter")
+ALL_SERVICES = (
+    "cloudtrail",
+    "config",
+    "ec2",
+    "ecr",
+    "elbv2",
+    "guardduty",
+    "iam",
+    "kms",
+    "rds",
+    "s3",
+    "securityhub",
+    "tags",
+)
 
 
 @dataclass(frozen=True)
@@ -13,6 +27,8 @@ class ScanConfig:
     role_arn: str | None = None
     external_id: str | None = None
     regions: tuple[str, ...] | None = None
+    exclude_regions: tuple[str, ...] = ()
+    services: tuple[str, ...] | None = None
     output: str = "table"
     output_file: str | None = None
     severity: str | None = None

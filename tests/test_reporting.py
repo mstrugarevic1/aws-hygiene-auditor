@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from aws_security_auditor.models import Finding, ScanReport, ScanSummary, Severity, sort_findings
+from aws_security_auditor.reporting.csv_report import render_csv
 from aws_security_auditor.reporting.json_report import render_json
 from aws_security_auditor.reporting.markdown import render_markdown
 
@@ -34,3 +35,9 @@ def test_markdown_output() -> None:
     assert "| Severity | Region | Service | Resource | Finding |" in text
     assert "us-east-1 (US East (N. Virginia))" in text
     assert "## Summary" in text
+
+
+def test_csv_output() -> None:
+    text = render_csv(_report())
+    assert "severity,region,service,resource_id,check_id,title,description,recommendation" in text
+    assert "HIGH,us-east-1,EC2,i-2,H,High,," in text

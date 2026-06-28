@@ -48,5 +48,10 @@ def render_console(report: ScanReport, no_color: bool = False) -> None:
     console.print(f"LOW: {counts[Severity.LOW]}")
     console.print(f"Errors: {report.summary.errors}")
     console.print(f"Duration: {report.summary.duration_seconds}s")
-    for error in report.errors:
-        console.print(f"WARNING {region_label(error.region)} {error.message}", style="yellow")
+    if report.errors:
+        console.print("Warnings:", style="yellow")
+        for error in report.errors:
+            console.print(
+                f"{error.service} {region_label(error.region)}: {error.message}",
+                style="yellow",
+            )

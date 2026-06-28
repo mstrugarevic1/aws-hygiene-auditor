@@ -6,9 +6,10 @@ from typing import Annotated
 
 import typer
 
-from aws_security_auditor.config import DEFAULT_REQUIRED_TAGS, ScanConfig
+from aws_security_auditor.config import ALL_SERVICES, DEFAULT_REQUIRED_TAGS, ScanConfig
 from aws_security_auditor.models import SEVERITY_ORDER, Severity
 from aws_security_auditor.reporting.console import render_console
+from aws_security_auditor.reporting.csv_report import render_csv
 from aws_security_auditor.reporting.json_report import render_json
 from aws_security_auditor.reporting.markdown import render_markdown
 from aws_security_auditor.scanner import run_scan
@@ -27,7 +28,13 @@ def scan(
     role_arn: Annotated[str | None, typer.Option(help="Optional role ARN to assume.")] = None,
     external_id: Annotated[str | None, typer.Option(help="External ID for AssumeRole.")] = None,
     regions: Annotated[str | None, typer.Option(help="Comma-separated AWS regions.")] = None,
-    output: Annotated[str, typer.Option(help="table, json, or markdown.")] = "table",
+    exclude_regions: Annotated[
+        str | None, typer.Option(help="Comma-separated AWS regions to skip.")
+    ] = None,
+    services: Annotated[
+        str | None, typer.Option(help="Comma-separated services to scan.")
+    ] = None,
+    output: Annotated[str, typer.Option(help="table, json, markdown, or csv.")] = "table",
     output_file: Annotated[Path | None, typer.Option(help="Write report to this path.")] = None,
     severity: Annotated[
         str | None, typer.Option(help="Only include findings at this severity or higher.")
@@ -52,12 +59,16 @@ def scan(
     selected_regions = (
         tuple(r.strip() for r in regions.split(",") if r.strip()) if regions else None
     )
+    excluded_regions = _csv(exclude_regions)
+    selected_services = _services(services)
     tags = tuple(t.strip() for t in required_tags.split(",") if t.strip())
     config = ScanConfig(
         profile=profile,
         role_arn=role_arn,
         external_id=external_id,
         regions=selected_regions,
+        exclude_regions=excluded_regions,
+        services=selected_services,
         output=output,
         output_file=str(output_file) if output_file else None,
         severity=severity,
@@ -79,8 +90,11 @@ def scan(
     elif output == "markdown":
         text = render_markdown(report)
         typer.echo(text)
+    elif output == "csv":
+        text = render_csv(report)
+        typer.echo(text)
     else:
-        raise typer.BadParameter("output must be table, json, or markdown")
+        raise typer.BadParameter("output must be table, json, markdown, or csv")
 
     if output_file:
         output_file.write_text(text, encoding="utf-8")
@@ -89,3 +103,15 @@ def scan(
         threshold = Severity(fail_on.upper())
         if any(SEVERITY_ORDER[f.severity] <= SEVERITY_ORDER[threshold] for f in report.findings):
             raise typer.Exit(1)
+
+
+def _csv(value: str | None) -> tuple[str, ...]:
+    return tuple(item.strip() for item in value.split(",") if item.strip()) if value else ()
+
+
+def _services(value: str | None) -> tuple[str, ...] | None:
+    services = tuple(item.lower() for item in _csv(value))
+    unknown = sorted(set(services) - set(ALL_SERVICES))
+    if unknown:
+        raise typer.BadParameter(f"unknown services: {', '.join(unknown)}")
+    return services or None

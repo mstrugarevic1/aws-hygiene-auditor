@@ -31,6 +31,19 @@ from aws_security_auditor.models import (
 )
 from aws_security_auditor.regions import discover_regions
 
+REGIONAL_SERVICES = {
+    "cloudtrail",
+    "config",
+    "ec2",
+    "ecr",
+    "elbv2",
+    "guardduty",
+    "kms",
+    "rds",
+    "securityhub",
+    "tags",
+}
+
 
 def run_scan(config: ScanConfig) -> ScanReport:
     started = time.monotonic()
@@ -38,7 +51,12 @@ def run_scan(config: ScanConfig) -> ScanReport:
     identity = client(session, "sts").call("get_caller_identity")
     account_id = identity.get("Account", "unknown")
     arn = identity.get("Arn", "unknown")
-    regions, skipped = discover_regions(session, config.regions)
+    if any(_enabled(config, service) for service in REGIONAL_SERVICES):
+        regions, skipped = discover_regions(session, config.regions)
+        excluded = set(config.exclude_regions)
+        regions = [region for region in regions if region not in excluded]
+    else:
+        regions, skipped = [], []
 
     results: list[CheckResult] = []
     if config.verbose:
@@ -46,8 +64,10 @@ def run_scan(config: ScanConfig) -> ScanReport:
             CheckResult(errors=[ScanError("Region", r, "Skipped: not opted in") for r in skipped])
         )
 
-    results.append(scan_s3(session, client(session, "s3", "us-east-1"), account_id))
-    results.append(scan_iam(client(session, "iam", "us-east-1"), config.access_key_age_days))
+    if _enabled(config, "s3"):
+        results.append(scan_s3(session, client(session, "s3", "us-east-1"), account_id))
+    if _enabled(config, "iam"):
+        results.append(scan_iam(client(session, "iam", "us-east-1"), config.access_key_age_days))
 
     with ThreadPoolExecutor(max_workers=max(1, config.max_workers)) as pool:
         futures = {
@@ -89,21 +109,38 @@ def run_scan(config: ScanConfig) -> ScanReport:
 
 
 def _scan_region(session: object, region: str, account_id: str, config: ScanConfig) -> CheckResult:
-    ec2 = client(session, "ec2", region)
-    rds = client(session, "rds", region)
     combined = CheckResult()
-    for result in (
-        scan_cloudtrail(client(session, "cloudtrail", region), region),
-        scan_config(client(session, "config", region), region),
-        scan_guardduty(client(session, "guardduty", region), region),
-        scan_securityhub(client(session, "securityhub", region), region),
-        scan_ec2(ec2, region, account_id, config.snapshot_age_days),
-        scan_elbv2(client(session, "elbv2", region), region),
-        scan_ecr(client(session, "ecr", region), region),
-        scan_kms(client(session, "kms", region), region),
-        scan_rds(rds, region),
-        scan_regional_tags(ec2, rds, region, config.required_tags),
-    ):
+    results: list[CheckResult] = []
+    if _enabled(config, "cloudtrail"):
+        results.append(scan_cloudtrail(client(session, "cloudtrail", region), region))
+    if _enabled(config, "config"):
+        results.append(scan_config(client(session, "config", region), region))
+    if _enabled(config, "guardduty"):
+        results.append(scan_guardduty(client(session, "guardduty", region), region))
+    if _enabled(config, "securityhub"):
+        results.append(scan_securityhub(client(session, "securityhub", region), region))
+    if _enabled(config, "ec2"):
+        results.append(
+            scan_ec2(client(session, "ec2", region), region, account_id, config.snapshot_age_days)
+        )
+    if _enabled(config, "elbv2"):
+        results.append(scan_elbv2(client(session, "elbv2", region), region))
+    if _enabled(config, "ecr"):
+        results.append(scan_ecr(client(session, "ecr", region), region))
+    if _enabled(config, "kms"):
+        results.append(scan_kms(client(session, "kms", region), region))
+    if _enabled(config, "rds"):
+        results.append(scan_rds(client(session, "rds", region), region))
+    if _enabled(config, "tags"):
+        results.append(
+            scan_regional_tags(
+                client(session, "ec2", region),
+                client(session, "rds", region),
+                region,
+                config.required_tags,
+            )
+        )
+    for result in results:
         combined = replace(
             combined,
             findings=combined.findings + result.findings,
@@ -112,3 +149,7 @@ def _scan_region(session: object, region: str, account_id: str, config: ScanConf
             checks=combined.checks + result.checks,
         )
     return combined
+
+
+def _enabled(config: ScanConfig, service: str) -> bool:
+    return config.services is None or service in config.services

@@ -58,3 +58,48 @@ def test_severity_filter_is_minimum_threshold(monkeypatch) -> None:
     report = run_scan(ScanConfig(severity="MEDIUM", max_workers=1))
 
     assert {f.check_id for f in report.findings} == {"H", "M"}
+
+
+def test_exclude_regions_filters_discovered_regions(monkeypatch) -> None:
+    monkeypatch.setattr("aws_security_auditor.scanner.build_session", lambda config: object())
+    monkeypatch.setattr(
+        "aws_security_auditor.scanner.client",
+        lambda *_args: type(
+            "C", (), {"call": lambda self, op, **kw: {"Account": "1", "Arn": "arn"}}
+        )(),
+    )
+    monkeypatch.setattr(
+        "aws_security_auditor.scanner.discover_regions",
+        lambda *_args: (["eu-central-1", "us-east-1"], []),
+    )
+    monkeypatch.setattr("aws_security_auditor.scanner.scan_s3", lambda *_args: CheckResult())
+    monkeypatch.setattr("aws_security_auditor.scanner.scan_iam", lambda *_args: CheckResult())
+    monkeypatch.setattr("aws_security_auditor.scanner._scan_region", lambda *_args: CheckResult())
+
+    report = run_scan(ScanConfig(exclude_regions=("us-east-1",), max_workers=1))
+
+    assert report.regions == ["eu-central-1"]
+
+
+def test_services_filter_runs_selected_checks(monkeypatch) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr("aws_security_auditor.scanner.build_session", lambda config: object())
+    monkeypatch.setattr(
+        "aws_security_auditor.scanner.client",
+        lambda *_args: type(
+            "C", (), {"call": lambda self, op, **kw: {"Account": "1", "Arn": "arn"}}
+        )(),
+    )
+    monkeypatch.setattr("aws_security_auditor.scanner.discover_regions", lambda *_args: (["a"], []))
+    monkeypatch.setattr("aws_security_auditor.scanner.scan_s3", lambda *_args: calls.append("s3"))
+    monkeypatch.setattr("aws_security_auditor.scanner.scan_iam", lambda *_args: calls.append("iam"))
+
+    def fake_ec2(*_args: object) -> CheckResult:
+        calls.append("ec2")
+        return CheckResult()
+
+    monkeypatch.setattr("aws_security_auditor.scanner.scan_ec2", fake_ec2)
+    report = run_scan(ScanConfig(services=("ec2",), max_workers=1))
+
+    assert report.regions == ["a"]
+    assert calls == ["ec2"]
