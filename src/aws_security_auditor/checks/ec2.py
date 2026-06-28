@@ -12,10 +12,6 @@ from aws_security_auditor.readonly_client import ReadOnlyAwsClient
 DB_PORTS = {1433, 1521, 27017, 3306, 5432, 6379, 9200}
 
 
-def _error(region: str, message: str) -> CheckResult:
-    return CheckResult(errors=[ScanError("EC2", region, message)])
-
-
 def _port_range(rule: dict[str, Any]) -> tuple[int, int] | None:
     if rule.get("IpProtocol") == "-1":
         return (0, 65535)
@@ -52,13 +48,21 @@ def scan_ec2(
                     "Enable EBS encryption by default.",
                 )
             )
+    except (ClientError, BotoCoreError, KeyError, TypeError) as exc:
+        result.errors.append(
+            ScanError("EC2", region, f"EBS default encryption check skipped: {exc}")
+        )
 
+    try:
         for page in ec2.paginate("describe_security_groups"):
             groups = page.get("SecurityGroups", [])
             result.resources += len(groups)
             for group in groups:
                 result.findings.extend(_security_group_findings(group, region))
+    except (ClientError, BotoCoreError, KeyError, TypeError) as exc:
+        result.errors.append(ScanError("EC2", region, f"Security group scan skipped: {exc}"))
 
+    try:
         for page in ec2.paginate("describe_addresses"):
             addresses = page.get("Addresses", [])
             result.resources += len(addresses)
@@ -78,14 +82,20 @@ def scan_ec2(
                             "are not needed.",
                         )
                     )
+    except (ClientError, BotoCoreError, KeyError, TypeError) as exc:
+        result.errors.append(ScanError("EC2", region, f"Elastic IP scan skipped: {exc}"))
 
+    try:
         for page in ec2.paginate("describe_volumes"):
             volumes = page.get("Volumes", [])
             result.resources += len(volumes)
             for volume in volumes:
                 result.findings.extend(_volume_findings(volume, region))
+    except (ClientError, BotoCoreError, KeyError, TypeError) as exc:
+        result.errors.append(ScanError("EC2", region, f"EBS volume scan skipped: {exc}"))
 
-        cutoff = datetime.now(UTC) - timedelta(days=snapshot_age_days)
+    cutoff = datetime.now(UTC) - timedelta(days=snapshot_age_days)
+    try:
         for page in ec2.paginate("describe_snapshots", OwnerIds=[account_id]):
             snapshots = page.get("Snapshots", [])
             result.resources += len(snapshots)
@@ -118,7 +128,10 @@ def scan_ec2(
                             "Remove public restore permissions unless explicitly required.",
                         )
                     )
+    except (ClientError, BotoCoreError, KeyError, TypeError) as exc:
+        result.errors.append(ScanError("EC2", region, f"EBS snapshot scan skipped: {exc}"))
 
+    try:
         for page in ec2.paginate("describe_images", Owners=[account_id]):
             images = page.get("Images", [])
             result.resources += len(images)
@@ -137,13 +150,14 @@ def scan_ec2(
                         )
                     )
     except (ClientError, BotoCoreError, KeyError, TypeError) as exc:
-        return _error(region, f"EC2 scan skipped: {exc}")
+        result.errors.append(ScanError("EC2", region, f"AMI scan skipped: {exc}"))
     return result
 
 
 def _security_group_findings(group: dict[str, Any], region: str) -> list[Finding]:
     findings: list[Finding] = []
     group_id = group.get("GroupId", "unknown")
+    group_name = group.get("GroupName", "unknown")
     for rule in group.get("IpPermissions", []):
         if not _public(rule):
             continue
@@ -163,16 +177,12 @@ def _security_group_findings(group: dict[str, Any], region: str) -> list[Finding
                 Severity.HIGH,
                 "EC2_SG_OPEN_DB",
             )
-        elif start in {80, 443} and end == start:
-            continue
+        elif start == 80 and end == 80:
+            title, severity, check = "HTTP open to the world", Severity.LOW, "EC2_SG_OPEN_HTTP"
+        elif start == 443 and end == 443:
+            title, severity, check = "HTTPS open to the world", Severity.LOW, "EC2_SG_OPEN_HTTPS"
         else:
             title, severity, check = "Public ingress port", Severity.MEDIUM, "EC2_SG_PUBLIC_INGRESS"
-        if group.get("GroupName") == "default":
-            title, severity, check = (
-                "Default security group allows public ingress",
-                Severity.HIGH,
-                "EC2_DEFAULT_SG_PUBLIC_INGRESS",
-            )
         findings.append(
             Finding(
                 severity,
@@ -181,10 +191,25 @@ def _security_group_findings(group: dict[str, Any], region: str) -> list[Finding
                 region,
                 group_id,
                 title,
-                f"Security group allows ingress from the internet on ports {start}-{end}.",
+                f"Security group {group_name} ({group_id}) allows ingress "
+                f"from the internet on ports {start}-{end}.",
                 "Restrict ingress to trusted CIDR ranges or remove the rule.",
             )
         )
+        if group_name == "default":
+            findings.append(
+                Finding(
+                    Severity.HIGH,
+                    "EC2_DEFAULT_SG_PUBLIC_INGRESS",
+                    "EC2",
+                    region,
+                    group_id,
+                    "Default security group allows public ingress",
+                    f"Default security group ({group_id}) allows ingress "
+                    f"from the internet on ports {start}-{end}.",
+                    "Remove public ingress from the default security group.",
+                )
+            )
     return findings
 
 
