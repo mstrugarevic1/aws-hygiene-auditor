@@ -27,15 +27,29 @@ account reviews.
 Requires Python 3.11+.
 
 ```bash
+git clone https://github.com/mstrugarevic1/aws-security-auditor.git
+cd aws-security-auditor
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+```
+
+For local development:
+
+```bash
 python -m pip install -e ".[dev]"
 ```
 
 ## Usage
 
 ```bash
-aws-security-auditor scan
-aws-security-auditor scan --profile production-readonly --output table
+aws-security-auditor scan --profile audit
+aws-security-auditor scan --profile audit --regions eu-central-1,eu-west-1
+aws-security-auditor scan --profile audit --exclude-regions us-east-1
+aws-security-auditor scan --profile audit --services ec2,s3,iam
+aws-security-auditor scan --profile audit --severity MEDIUM
 aws-security-auditor scan --output json --output-file report.json
+aws-security-auditor scan --output csv --output-file findings.csv
 ```
 
 Options:
@@ -45,7 +59,9 @@ Options:
 --role-arn ROLE_ARN
 --external-id EXTERNAL_ID
 --regions REGION1,REGION2
---output table|json|markdown
+--exclude-regions REGION1,REGION2
+--services ec2,s3,iam
+--output table|json|markdown|csv
 --output-file PATH
 --severity HIGH|MEDIUM|LOW
 --fail-on HIGH|MEDIUM|LOW
@@ -60,6 +76,12 @@ Options:
 By default the scanner discovers all enabled AWS regions with `ec2:DescribeRegions`. It scans
 `opt-in-not-required` and `opted-in` regions, and skips `not-opted-in` regions. IAM, STS, and
 S3 bucket enumeration run once as global/account-level checks.
+
+Use `--services` to scan only selected services. Supported values are `cloudtrail`, `config`,
+`ec2`, `ecr`, `elbv2`, `guardduty`, `iam`, `kms`, `rds`, `s3`, `securityhub`, and `tags`.
+
+Use `--severity MEDIUM` to show `HIGH` and `MEDIUM` findings. Use `--severity HIGH` to show only
+high-severity findings.
 
 Use `--fail-on HIGH` in CI or scheduled jobs when high-severity findings should fail the run.
 
@@ -109,7 +131,7 @@ Severity meanings:
 
 Implemented checks:
 
-- EC2 security groups open to the world for SSH, RDP, database ports, all ports, or other non-web ports
+- EC2 security groups open to the world for SSH, RDP, HTTP, HTTPS, database ports, all ports, or other ports
 - default security groups with public ingress
 - unused Elastic IP addresses
 - unattached or unencrypted EBS volumes, and disabled EBS encryption by default
@@ -134,19 +156,14 @@ Implemented checks:
 ## Example Output
 
 ```text
-HIGH    global                             IAM        root        Root account MFA is not enabled
-HIGH    eu-central-1 (Europe (Frankfurt))  EC2        sg-012345   SSH open to the world
-HIGH    us-east-1 (US East (N. Virginia))  EBS        snap-012345 Public EBS snapshot
-HIGH    us-east-1 (US East (N. Virginia))  EC2        ami-012345  Public account-owned AMI
-MEDIUM  us-east-1 (US East (N. Virginia))  CloudTrail account     No multi-region CloudTrail trail found
-MEDIUM  eu-west-1 (Europe (Ireland))       Config     account     AWS Config recorder is not configured
-MEDIUM  eu-west-1 (Europe (Ireland))       GuardDuty  account     GuardDuty is not enabled
-MEDIUM  us-east-1 (US East (N. Virginia))  SecurityHub account     Security Hub is not enabled
-MEDIUM  eu-west-1 (Europe (Ireland))       ELBv2      app-lb      Internet-facing load balancer
-MEDIUM  eu-west-1 (Europe (Ireland))       EBS        vol-012345  Unattached EBS volume
-LOW     us-east-1 (US East (N. Virginia))  ECR        app         ECR scan on push is disabled
-LOW     us-east-1 (US East (N. Virginia))  KMS        key-012345  KMS key rotation is disabled
-LOW     us-east-1 (US East (N. Virginia))  EC2        i-012345    Missing required tags
++----------+--------------------------+---------+-----------+-------------------------------+
+| Severity | Region                   | Service | Resource  | Finding                       |
++----------+--------------------------+---------+-----------+-------------------------------+
+| HIGH     | global                   | IAM     | root      | Root account MFA is disabled  |
+| HIGH     | eu-central-1 (Frankfurt) | EC2     | sg-012345 | SSH open to the world         |
+| MEDIUM   | eu-west-1 (Ireland)      | Config  | account   | Config recorder is missing    |
+| LOW      | us-east-1 (N. Virginia)  | ECR     | app       | ECR scan on push is disabled  |
++----------+--------------------------+---------+-----------+-------------------------------+
 
 Scanned regions: 18
 Checks executed: 28
@@ -162,6 +179,7 @@ With `--fail-on HIGH`, the report is still rendered, but the command exits with 
 when at least one `HIGH` finding is present.
 
 JSON and Markdown reports contain no ANSI color codes.
+CSV reports contain one row per finding.
 
 ## Safety
 
