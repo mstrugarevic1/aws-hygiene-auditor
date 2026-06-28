@@ -11,6 +11,8 @@ class FakeEc2:
     def call(self, operation: str, **kwargs: object) -> dict[str, object]:
         if operation == "get_ebs_encryption_by_default":
             return {"EbsEncryptionByDefault": False}
+        if operation == "describe_addresses":
+            return {"Addresses": [{"AllocationId": "eipalloc-1"}]}
         if operation == "describe_snapshot_attribute":
             return {"CreateVolumePermissions": [{"Group": "all"}]}
         raise AssertionError(operation)
@@ -75,7 +77,6 @@ class FakeEc2:
                     ]
                 }
             ],
-            "describe_addresses": [[{"Addresses": [{"AllocationId": "eipalloc-1"}]}][0]],
             "describe_volumes": [
                 {
                     "Volumes": [

@@ -63,25 +63,24 @@ def scan_ec2(
         result.errors.append(ScanError("EC2", region, f"Security group scan skipped: {exc}"))
 
     try:
-        for page in ec2.paginate("describe_addresses"):
-            addresses = page.get("Addresses", [])
-            result.resources += len(addresses)
-            for address in addresses:
-                if "AssociationId" not in address:
-                    alloc = address.get("AllocationId") or address.get("PublicIp", "unknown")
-                    result.findings.append(
-                        Finding(
-                            Severity.MEDIUM,
-                            "EC2_UNUSED_EIP",
-                            "EC2",
-                            region,
-                            alloc,
-                            "Unused Elastic IP address",
-                            "Elastic IP address is not associated with a resource.",
-                            "Release unused Elastic IP addresses after confirming they "
-                            "are not needed.",
-                        )
+        addresses = ec2.call("describe_addresses").get("Addresses", [])
+        result.resources += len(addresses)
+        for address in addresses:
+            if "AssociationId" not in address:
+                alloc = address.get("AllocationId") or address.get("PublicIp", "unknown")
+                result.findings.append(
+                    Finding(
+                        Severity.MEDIUM,
+                        "EC2_UNUSED_EIP",
+                        "EC2",
+                        region,
+                        alloc,
+                        "Unused Elastic IP address",
+                        "Elastic IP address is not associated with a resource.",
+                        "Release unused Elastic IP addresses after confirming they "
+                        "are not needed.",
                     )
+                )
     except (ClientError, BotoCoreError, KeyError, TypeError) as exc:
         result.errors.append(ScanError("EC2", region, f"Elastic IP scan skipped: {exc}"))
 
