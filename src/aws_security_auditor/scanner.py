@@ -21,7 +21,14 @@ from aws_security_auditor.checks.rds import scan_rds
 from aws_security_auditor.checks.s3 import scan_s3
 from aws_security_auditor.checks.tags import scan_regional_tags
 from aws_security_auditor.config import ScanConfig
-from aws_security_auditor.models import ScanError, ScanReport, ScanSummary, Severity, sort_findings
+from aws_security_auditor.models import (
+    SEVERITY_ORDER,
+    ScanError,
+    ScanReport,
+    ScanSummary,
+    Severity,
+    sort_findings,
+)
 from aws_security_auditor.regions import discover_regions
 
 
@@ -57,8 +64,10 @@ def run_scan(config: ScanConfig) -> ScanReport:
 
     findings = [finding for result in results for finding in result.findings]
     if config.severity:
-        minimum = Severity(config.severity)
-        findings = [f for f in findings if f.severity == minimum]
+        minimum = Severity(config.severity.upper())
+        findings = [
+            f for f in findings if SEVERITY_ORDER[f.severity] <= SEVERITY_ORDER[minimum]
+        ]
     errors = [error for result in results for error in result.errors]
     summary = ScanSummary(
         scanned_regions=len(regions),

@@ -25,4 +25,4 @@ class ScanConfig:
     max_workers: int = 5
 
 
-AWS_CONFIG = Config(retries={"mode": "standard", "max_attempts": 3})
+AWS_CONFIG = Config(retries={"mode": "adaptive", "max_attempts": 5})

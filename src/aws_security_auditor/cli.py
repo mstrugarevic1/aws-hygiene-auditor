@@ -30,7 +30,7 @@ def scan(
     output: Annotated[str, typer.Option(help="table, json, or markdown.")] = "table",
     output_file: Annotated[Path | None, typer.Option(help="Write report to this path.")] = None,
     severity: Annotated[
-        str | None, typer.Option(help="Only include HIGH, MEDIUM, or LOW findings.")
+        str | None, typer.Option(help="Only include findings at this severity or higher.")
     ] = None,
     fail_on: Annotated[
         str | None,
@@ -86,6 +86,6 @@ def scan(
         output_file.write_text(text, encoding="utf-8")
 
     if fail_on:
-        threshold = Severity(fail_on)
+        threshold = Severity(fail_on.upper())
         if any(SEVERITY_ORDER[f.severity] <= SEVERITY_ORDER[threshold] for f in report.findings):
             raise typer.Exit(1)
