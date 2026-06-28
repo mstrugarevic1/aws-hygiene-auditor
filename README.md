@@ -1,7 +1,7 @@
-# aws-hygiene-auditor
+# aws-security-auditor
 
 <p align="center">
-  <img src="docs/assets/aws-hygiene-auditor-mascot.png" alt="AWS Hygiene Auditor mascot" width="320">
+  <img src="docs/assets/aws-security-auditor-logo.jpg" alt="AWS Security Auditor logo" width="320">
 </p>
 
 <p align="center">
@@ -12,14 +12,15 @@
   <img alt="AI assisted with Codex" src="https://img.shields.io/badge/AI_assisted-Codex-111827">
 </p>
 
-`aws-hygiene-auditor` is a small Python CLI that scans an AWS account for common security,
-cost, and governance hygiene issues.
+`aws-security-auditor` is a small Python CLI that scans an AWS account for common security,
+cost, and governance posture issues.
 
 This tool never modifies AWS resources. It performs only read-only List, Get and Describe
 operations and can be used with a read-only IAM role.
 
-This tool is not a replacement for AWS Security Hub, AWS Config, Trusted Advisor, Prowler or a
-formal security assessment.
+This tool is not a replacement for AWS Security Hub, AWS Config, CloudTrail, Trusted Advisor,
+Prowler, or a formal security assessment. It is a point-in-time read-only scanner for quick
+account reviews.
 
 ## Install
 
@@ -32,9 +33,9 @@ python -m pip install -e ".[dev]"
 ## Usage
 
 ```bash
-aws-hygiene-auditor scan
-aws-hygiene-auditor scan --profile production-readonly --output table
-aws-hygiene-auditor scan --output json --output-file report.json
+aws-security-auditor scan
+aws-security-auditor scan --profile production-readonly --output table
+aws-security-auditor scan --output json --output-file report.json
 ```
 
 Options:
@@ -47,6 +48,7 @@ Options:
 --output table|json|markdown
 --output-file PATH
 --severity HIGH|MEDIUM|LOW
+--fail-on HIGH|MEDIUM|LOW
 --no-color
 --verbose
 --snapshot-age-days 90
@@ -59,6 +61,8 @@ By default the scanner discovers all enabled AWS regions with `ec2:DescribeRegio
 `opt-in-not-required` and `opted-in` regions, and skips `not-opted-in` regions. IAM, STS, and
 S3 bucket enumeration run once as global/account-level checks.
 
+Use `--fail-on HIGH` in CI or scheduled jobs when high-severity findings should fail the run.
+
 ## Authentication
 
 Supported authentication:
@@ -70,8 +74,8 @@ Supported authentication:
 Recommended approach: use a dedicated read-only role.
 
 ```bash
-aws-hygiene-auditor scan \
-  --role-arn arn:aws:iam::123456789012:role/AwsHygieneAuditorReadOnly
+aws-security-auditor scan \
+  --role-arn arn:aws:iam::123456789012:role/AwsSecurityAuditorReadOnly
 ```
 
 Example trust policy:
@@ -101,18 +105,31 @@ Severity meanings:
 
 - `HIGH`: likely security exposure requiring prompt review
 - `MEDIUM`: cost, resilience, or exposure issue worth fixing
-- `LOW`: governance or hygiene improvement
+- `LOW`: governance or security posture improvement
 
 Implemented checks:
 
 - EC2 security groups open to the world for SSH, RDP, database ports, all ports, or other non-web ports
+- default security groups with public ingress
 - unused Elastic IP addresses
-- unattached or unencrypted EBS volumes
+- unattached or unencrypted EBS volumes, and disabled EBS encryption by default
 - old account-owned EBS snapshots
+- public account-owned AMIs and public EBS snapshots
 - public, unencrypted, under-backed-up RDS instances
 - S3 public ACL/policy, public access block, encryption, versioning, and access logging
-- IAM old or unused access keys, console users without MFA, direct inline user policies
+- IAM root MFA, root access keys, password policy, old or unused access keys, console users without MFA, direct inline user policies
+- CloudTrail trails, AWS Config recorders, GuardDuty detectors, and Security Hub enablement
+- internet-facing Application/Network Load Balancers
+- ECR scan-on-push settings
+- KMS key rotation for eligible customer-managed keys
 - missing required tags on EC2 instances, EBS volumes, and RDS instances
+
+## How this differs from AWS native services
+
+- CloudTrail records AWS API activity and is used for audit and incident investigation.
+- AWS Config records resource configuration history and evaluates compliance rules continuously.
+- Security Hub aggregates security findings and posture controls across accounts and services.
+- This tool gives a fast read-only snapshot without enabling a managed service first.
 
 ## Example Output
 
@@ -142,7 +159,7 @@ or cleanup flag.
 
 ## Limitations
 
-- It checks common hygiene issues only.
+- It checks common security posture issues only.
 - It does not inspect S3 objects or object contents.
 - It does not remediate findings.
 - IAM direct managed policy attachment checks are intentionally omitted because the AWS API name
