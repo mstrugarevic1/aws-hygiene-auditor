@@ -20,7 +20,7 @@ ALLOWED_OPERATIONS = {
     "config": {"describe_configuration_recorders", "describe_configuration_recorder_status"},
     "guardduty": {"list_detectors"},
     "securityhub": {"describe_hub"},
-    "elasticloadbalancingv2": {"describe_load_balancers"},
+    "elbv2": {"describe_load_balancers"},
     "ecr": {"describe_repositories"},
     "kms": {"get_key_rotation_status", "list_keys"},
     "rds": {"describe_db_instances"},

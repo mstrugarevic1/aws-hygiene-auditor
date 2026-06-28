@@ -58,3 +58,8 @@ def test_source_has_no_prohibited_boto3_method_names() -> None:
         for operation in operations
         if any(part in operation.split("_") for part in prohibited)
     ]
+
+
+def test_elbv2_service_name_is_boto3_name() -> None:
+    assert "elbv2" in ALLOWED_OPERATIONS
+    assert "elasticloadbalancingv2" not in ALLOWED_OPERATIONS

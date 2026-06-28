@@ -89,7 +89,7 @@ def _scan_region(session: object, region: str, account_id: str, config: ScanConf
         scan_guardduty(client(session, "guardduty", region), region),
         scan_securityhub(client(session, "securityhub", region), region),
         scan_ec2(ec2, region, account_id, config.snapshot_age_days),
-        scan_elbv2(client(session, "elasticloadbalancingv2", region), region),
+        scan_elbv2(client(session, "elbv2", region), region),
         scan_ecr(client(session, "ecr", region), region),
         scan_kms(client(session, "kms", region), region),
         scan_rds(rds, region),
