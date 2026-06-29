@@ -48,6 +48,7 @@ aws-security-auditor scan --profile audit --regions eu-central-1,eu-west-1
 aws-security-auditor scan --profile audit --exclude-regions us-east-1
 aws-security-auditor scan --profile audit --services ec2,s3,iam
 aws-security-auditor scan --profile audit --severity MEDIUM
+aws-security-auditor scan --profile audit --config examples/aws-security-auditor.toml
 aws-security-auditor scan --output json --output-file report.json
 aws-security-auditor scan --output csv --output-file findings.csv
 aws-security-auditor scan --notify-on HIGH --slack-webhook-url "$SLACK_WEBHOOK_URL"
@@ -148,6 +149,9 @@ required_tags = ["Owner", "Environment", "CostCenter"]
 Environment = ["prod", "production", "prd"]
 Criticality = ["high", "critical", "tier1"]
 ```
+
+See [examples/aws-security-auditor.toml](examples/aws-security-auditor.toml) for a reusable
+starting point.
 
 | Setting | Purpose |
 | --- | --- |
@@ -257,13 +261,13 @@ Implemented checks:
 +----------+--------------------------+---------+-----------+-------------------------------+
 | HIGH     | global                   | IAM     | root      | Root account MFA is disabled  |
 | HIGH     | eu-central-1 (Frankfurt) | EC2     | sg-012345 | SSH open to the world         |
-| MEDIUM   | eu-west-1 (Ireland)      | Config  | account   | Config recorder is missing    |
+| MEDIUM   | eu-west-1 (Ireland)      | RDS     | prod-db   | Deletion protection disabled   |
 | LOW      | us-east-1 (N. Virginia)  | ECR     | app       | ECR scan on push is disabled  |
 +----------+--------------------------+---------+-----------+-------------------------------+
 
 Scanned regions: 18
-Checks executed: 28
-Resources inspected: 413
+Checks executed: 31
+Resources inspected: 421
 HIGH: 4
 MEDIUM: 6
 LOW: 3

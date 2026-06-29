@@ -1,0 +1,5 @@
+required_tags = ["Owner", "Environment", "CostCenter"]
+
+[critical_resource_tags]
+Environment = ["prod", "production", "prd"]
+Criticality = ["high", "critical", "tier1"]
