@@ -192,10 +192,13 @@ def _administrator_access_findings(iam: ReadOnlyAwsClient, result: CheckResult) 
 
 
 def _has_administrator_access(detail: dict[str, object]) -> bool:
+    policies = detail.get("AttachedManagedPolicies", [])
+    if not isinstance(policies, list):
+        return False
     return any(
         policy.get("PolicyName") == "AdministratorAccess"
         or str(policy.get("PolicyArn", "")).endswith("/AdministratorAccess")
-        for policy in detail.get("AttachedManagedPolicies", [])
+        for policy in policies
         if isinstance(policy, dict)
     )
 

@@ -42,16 +42,14 @@ python -m pip install -e ".[dev]"
 
 ## Usage
 
+Common examples:
+
 ```bash
 aws-security-auditor scan --profile audit
 aws-security-auditor scan --profile audit --regions eu-central-1,eu-west-1
-aws-security-auditor scan --profile audit --exclude-regions us-east-1
 aws-security-auditor scan --profile audit --services ec2,s3,iam
-aws-security-auditor scan --profile audit --severity MEDIUM
 aws-security-auditor scan --profile audit --config examples/aws-security-auditor.toml
-aws-security-auditor scan --output json --output-file report.json
-aws-security-auditor scan --output csv --output-file findings.csv
-aws-security-auditor scan --notify-on HIGH --slack-webhook-url "$SLACK_WEBHOOK_URL"
+aws-security-auditor scan --profile audit --fail-on HIGH --notify-on HIGH
 ```
 
 Options:
@@ -104,33 +102,31 @@ high-severity findings.
 
 Use `--fail-on HIGH` in CI or scheduled jobs when high-severity findings should fail the run.
 
-## Slack notifications
-
-Use `--notify-on` with a Slack incoming webhook when scheduled scans should notify a channel:
+Recommended scheduled scan:
 
 ```bash
 aws-security-auditor scan \
   --profile audit \
-  --notify-on HIGH \
-  --slack-webhook-url "$SLACK_WEBHOOK_URL"
+  --config examples/aws-security-auditor.toml \
+  --fail-on HIGH \
+  --notify-on HIGH
 ```
 
-The webhook can also come from the environment:
+## Slack notifications
+
+Use `--notify-on` with a Slack incoming webhook when scheduled scans should notify a channel.
+The webhook can be passed directly or read from `AWS_SECURITY_AUDITOR_SLACK_WEBHOOK_URL`:
 
 ```bash
 export AWS_SECURITY_AUDITOR_SLACK_WEBHOOK_URL="$SLACK_WEBHOOK_URL"
 aws-security-auditor scan --profile audit --notify-on HIGH
 ```
 
-| Setting | Behavior |
-| --- | --- |
-| `--notify-on HIGH` | Notify only when at least one `HIGH` finding exists. |
-| `--notify-on MEDIUM` | Notify when `HIGH` or `MEDIUM` findings exist. |
-| `--notify-on LOW` | Notify when any finding exists. |
-| Slack delivery failure | Prints a warning but does not change the scan exit code. |
-| `--fail-on` | Still controls the command exit code independently from Slack. |
+`--notify-on HIGH` sends only when `HIGH` findings exist. `MEDIUM` includes `HIGH` and
+`MEDIUM`; `LOW` sends for any finding. Slack delivery failure prints a warning but does not
+change the scan exit code. `--fail-on` still controls CI failure behavior independently.
 
-The webhook URL is never printed by the tool.
+The webhook URL is never printed by the tool and must use HTTPS.
 
 ## Config file
 
@@ -162,10 +158,8 @@ Tags tune severity and context only. Missing tags do not suppress direct securit
 
 ## Hygiene vs baseline checks
 
-| Check type | Default | Examples |
-| --- | --- | --- |
-| Resource hygiene | Yes | Public exposure, weak IAM posture, missing encryption, missing backups, unused network resources, required tag coverage. |
-| Account baseline | No | CloudTrail, AWS Config, GuardDuty, Security Hub. |
+The default scan focuses on resource hygiene: public exposure, weak IAM posture, missing
+encryption, missing backups, unused network resources, and required tag coverage.
 
 Account baseline services are available when explicitly selected:
 
@@ -173,22 +167,19 @@ Account baseline services are available when explicitly selected:
 aws-security-auditor scan --services cloudtrail,config,guardduty,securityhub
 ```
 
-CloudTrail, AWS Config, GuardDuty, and Security Hub are important account setup controls, but
-their absence is treated as a baseline/setup gap rather than a default resource hygiene finding.
+CloudTrail, AWS Config, GuardDuty, and Security Hub are important account setup controls. Their
+absence is treated as a baseline/setup gap rather than a default resource hygiene finding.
 
-Tags are used for governance and can later help tune severity or context, but missing tags must
-not hide security exposure. Public access, IAM risk, public snapshots, and similar direct risks
-are evaluated from AWS resource configuration whether tags exist or not.
+Public access, IAM risk, public snapshots, and similar direct risks are evaluated from AWS
+resource configuration whether tags exist or not.
 
 ## Authentication
 
 Supported authentication:
 
-| Method | How to use it |
-| --- | --- |
-| Default boto3 credential chain | Run without `--profile` or `--role-arn`. |
-| Named AWS profile | Pass `--profile PROFILE`. |
-| STS AssumeRole | Pass `--role-arn ROLE_ARN`; add `--external-id` when required. |
+- default boto3 credential chain
+- named AWS profile with `--profile`
+- STS AssumeRole with `--role-arn` and optional `--external-id`
 
 Recommended approach: use a dedicated read-only role.
 
@@ -246,12 +237,11 @@ Implemented checks:
 
 ## How this differs from AWS native services
 
-| Service or tool | Role |
-| --- | --- |
-| CloudTrail | Records AWS API activity for audit and incident investigation. |
-| AWS Config | Records resource configuration history and evaluates compliance rules continuously. |
-| Security Hub | Aggregates security findings and posture controls across accounts and services. |
-| aws-security-auditor | Provides a fast read-only snapshot without enabling a managed service first. |
+CloudTrail records AWS API activity. AWS Config records resource configuration history. Security
+Hub aggregates posture findings across accounts and services.
+
+`aws-security-auditor` is different: it gives a fast read-only snapshot without requiring those
+managed services to be enabled first.
 
 ## Example Output
 
@@ -290,21 +280,20 @@ or cleanup flag.
 
 ## Limitations
 
-| Limitation | Detail |
-| --- | --- |
-| Coverage | It checks common security posture issues only. |
-| S3 object contents | It does not inspect S3 objects or object contents. |
-| Remediation | It does not remediate findings. |
-| IAM managed policy attachments | IAM direct managed policy attachment checks are intentionally omitted because the AWS API name contains `Attach`, which this project blocks by policy. |
-| API errors | API errors are reported and the scan continues where possible. |
+- It checks common security posture issues only.
+- It does not inspect S3 objects or object contents.
+- It does not remediate findings.
+- IAM direct managed policy attachment checks are intentionally omitted because the AWS API name
+  contains `Attach`, which this project blocks by policy.
+- API errors are reported and the scan continues where possible.
 
 ## Development
 
-| Command | Purpose |
-| --- | --- |
-| `ruff check .` | Lint the codebase. |
-| `mypy src` | Type-check source code. |
-| `pytest` | Run tests. |
+```bash
+ruff check .
+mypy src
+pytest
+```
 
 CI runs those commands without AWS credentials and without integration tests against a real account.
 
