@@ -20,7 +20,7 @@ from aws_security_auditor.checks.network import scan_ecr, scan_elbv2, scan_kms
 from aws_security_auditor.checks.rds import scan_rds
 from aws_security_auditor.checks.s3 import scan_s3
 from aws_security_auditor.checks.tags import scan_regional_tags
-from aws_security_auditor.config import ScanConfig
+from aws_security_auditor.config import DEFAULT_SERVICES, ScanConfig
 from aws_security_auditor.models import (
     SEVERITY_ORDER,
     ScanError,
@@ -152,4 +152,5 @@ def _scan_region(session: object, region: str, account_id: str, config: ScanConf
 
 
 def _enabled(config: ScanConfig, service: str) -> bool:
-    return config.services is None or service in config.services
+    services = DEFAULT_SERVICES if config.services is None else config.services
+    return service in services

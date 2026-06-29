@@ -103,3 +103,69 @@ def test_services_filter_runs_selected_checks(monkeypatch) -> None:
 
     assert report.regions == ["a"]
     assert calls == ["ec2"]
+
+
+def test_default_scan_skips_account_baseline_checks(monkeypatch) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr("aws_security_auditor.scanner.build_session", lambda config: object())
+    monkeypatch.setattr(
+        "aws_security_auditor.scanner.client",
+        lambda *_args: type(
+            "C", (), {"call": lambda self, op, **kw: {"Account": "1", "Arn": "arn"}}
+        )(),
+    )
+    monkeypatch.setattr("aws_security_auditor.scanner.discover_regions", lambda *_args: (["a"], []))
+    monkeypatch.setattr("aws_security_auditor.scanner.scan_s3", lambda *_args: CheckResult())
+    monkeypatch.setattr("aws_security_auditor.scanner.scan_iam", lambda *_args: CheckResult())
+    monkeypatch.setattr("aws_security_auditor.scanner.scan_ec2", lambda *_args: CheckResult())
+    monkeypatch.setattr("aws_security_auditor.scanner.scan_elbv2", lambda *_args: CheckResult())
+    monkeypatch.setattr("aws_security_auditor.scanner.scan_ecr", lambda *_args: CheckResult())
+    monkeypatch.setattr("aws_security_auditor.scanner.scan_kms", lambda *_args: CheckResult())
+    monkeypatch.setattr("aws_security_auditor.scanner.scan_rds", lambda *_args: CheckResult())
+    monkeypatch.setattr(
+        "aws_security_auditor.scanner.scan_regional_tags", lambda *_args: CheckResult()
+    )
+    monkeypatch.setattr(
+        "aws_security_auditor.scanner.scan_cloudtrail",
+        lambda *_args: calls.append("cloudtrail") or CheckResult(),
+    )
+    monkeypatch.setattr(
+        "aws_security_auditor.scanner.scan_config",
+        lambda *_args: calls.append("config") or CheckResult(),
+    )
+    monkeypatch.setattr(
+        "aws_security_auditor.scanner.scan_guardduty",
+        lambda *_args: calls.append("guardduty") or CheckResult(),
+    )
+    monkeypatch.setattr(
+        "aws_security_auditor.scanner.scan_securityhub",
+        lambda *_args: calls.append("securityhub") or CheckResult(),
+    )
+
+    run_scan(ScanConfig(max_workers=1))
+
+    assert calls == []
+
+
+def test_baseline_checks_run_when_explicitly_selected(monkeypatch) -> None:
+    calls: list[str] = []
+    monkeypatch.setattr("aws_security_auditor.scanner.build_session", lambda config: object())
+    monkeypatch.setattr(
+        "aws_security_auditor.scanner.client",
+        lambda *_args: type(
+            "C", (), {"call": lambda self, op, **kw: {"Account": "1", "Arn": "arn"}}
+        )(),
+    )
+    monkeypatch.setattr("aws_security_auditor.scanner.discover_regions", lambda *_args: (["a"], []))
+    monkeypatch.setattr(
+        "aws_security_auditor.scanner.scan_cloudtrail",
+        lambda *_args: calls.append("cloudtrail") or CheckResult(),
+    )
+    monkeypatch.setattr(
+        "aws_security_auditor.scanner.scan_config",
+        lambda *_args: calls.append("config") or CheckResult(),
+    )
+
+    run_scan(ScanConfig(services=("cloudtrail", "config"), max_workers=1))
+
+    assert calls == ["cloudtrail", "config"]

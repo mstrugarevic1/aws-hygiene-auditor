@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from aws_security_auditor.config import ALL_SERVICES, DEFAULT_REQUIRED_TAGS, ScanConfig
-from aws_security_auditor.models import SEVERITY_ORDER, Severity
+from aws_security_auditor.models import SEVERITY_ORDER, ScanReport, Severity
+from aws_security_auditor.notifiers.slack import notify_slack
 from aws_security_auditor.reporting.console import render_console
 from aws_security_auditor.reporting.csv_report import render_csv
 from aws_security_auditor.reporting.json_report import render_json
@@ -51,6 +53,16 @@ def scan(
         DEFAULT_REQUIRED_TAGS
     ),
     max_workers: Annotated[int, typer.Option(help="Maximum regional scan worker threads.")] = 5,
+    notify_on: Annotated[
+        str | None,
+        typer.Option(help="Send Slack notification when findings include this severity or higher."),
+    ] = None,
+    slack_webhook_url: Annotated[
+        str | None,
+        typer.Option(
+            help="Slack webhook URL. Defaults to AWS_SECURITY_AUDITOR_SLACK_WEBHOOK_URL."
+        ),
+    ] = None,
 ) -> None:
     logging.basicConfig(
         level=logging.DEBUG if verbose else logging.INFO,
@@ -99,9 +111,23 @@ def scan(
     if output_file:
         output_file.write_text(text, encoding="utf-8")
 
+    if notify_on:
+        threshold = Severity(notify_on.upper())
+        webhook_url = slack_webhook_url or os.environ.get("AWS_SECURITY_AUDITOR_SLACK_WEBHOOK_URL")
+        if webhook_url and _has_findings_at_or_above(report, threshold):
+            try:
+                notify_slack(report, webhook_url, threshold)
+            except Exception as exc:  # noqa: BLE001
+                typer.echo(f"warning: Slack notification failed: {exc}", err=True)
+        elif not webhook_url:
+            typer.echo(
+                "warning: Slack notification skipped: webhook URL is not configured",
+                err=True,
+            )
+
     if fail_on:
         threshold = Severity(fail_on.upper())
-        if any(SEVERITY_ORDER[f.severity] <= SEVERITY_ORDER[threshold] for f in report.findings):
+        if _has_findings_at_or_above(report, threshold):
             raise typer.Exit(1)
 
 
@@ -115,3 +141,7 @@ def _services(value: str | None) -> tuple[str, ...] | None:
     if unknown:
         raise typer.BadParameter(f"unknown services: {', '.join(unknown)}")
     return services or None
+
+
+def _has_findings_at_or_above(report: ScanReport, threshold: Severity) -> bool:
+    return any(SEVERITY_ORDER[f.severity] <= SEVERITY_ORDER[threshold] for f in report.findings)

@@ -50,48 +50,115 @@ aws-security-auditor scan --profile audit --services ec2,s3,iam
 aws-security-auditor scan --profile audit --severity MEDIUM
 aws-security-auditor scan --output json --output-file report.json
 aws-security-auditor scan --output csv --output-file findings.csv
+aws-security-auditor scan --notify-on HIGH --slack-webhook-url "$SLACK_WEBHOOK_URL"
 ```
 
 Options:
 
-```text
---profile PROFILE
---role-arn ROLE_ARN
---external-id EXTERNAL_ID
---regions REGION1,REGION2
---exclude-regions REGION1,REGION2
---services ec2,s3,iam
---output table|json|markdown|csv
---output-file PATH
---severity HIGH|MEDIUM|LOW
---fail-on HIGH|MEDIUM|LOW
---no-color
---verbose
---snapshot-age-days 90
---access-key-age-days 90
---required-tags Owner,Environment,CostCenter
---max-workers 5
-```
+| Option | Purpose |
+| --- | --- |
+| `--profile PROFILE` | Use a named AWS profile. |
+| `--role-arn ROLE_ARN` | Assume a read-only audit role before scanning. |
+| `--external-id EXTERNAL_ID` | Pass an external ID when assuming a role. |
+| `--regions REGION1,REGION2` | Scan only the listed AWS regions. |
+| `--exclude-regions REGION1,REGION2` | Skip the listed AWS regions. |
+| `--services ec2,s3,iam` | Scan only selected services. |
+| `--output table,json,markdown,csv` | Choose the report format. |
+| `--output-file PATH` | Write the report to a file. |
+| `--severity HIGH,MEDIUM,LOW` | Show findings at this severity or higher. |
+| `--fail-on HIGH,MEDIUM,LOW` | Exit with status `1` when this severity or higher is found. |
+| `--no-color` | Disable terminal color. |
+| `--verbose` | Show skipped regions and warnings. |
+| `--snapshot-age-days 90` | Set the old snapshot threshold. |
+| `--access-key-age-days 90` | Set the old access key threshold. |
+| `--required-tags Owner,Environment,CostCenter` | Set required resource tags. |
+| `--max-workers 5` | Set the maximum regional scan worker threads. |
+| `--notify-on HIGH,MEDIUM,LOW` | Send a Slack notification when this severity or higher is found. |
+| `--slack-webhook-url URL` | Send Slack notifications to this incoming webhook URL. |
 
 By default the scanner discovers all enabled AWS regions with `ec2:DescribeRegions`. It scans
 `opt-in-not-required` and `opted-in` regions, and skips `not-opted-in` regions. IAM, STS, and
 S3 bucket enumeration run once as global/account-level checks.
 
-Use `--services` to scan only selected services. Supported values are `cloudtrail`, `config`,
-`ec2`, `ecr`, `elbv2`, `guardduty`, `iam`, `kms`, `rds`, `s3`, `securityhub`, and `tags`.
+Use `--services` to scan only selected services.
+
+| Service | Default | Scope |
+| --- | --- | --- |
+| `ec2` | Yes | EC2 instances, security groups, EBS volumes, snapshots, AMIs, and Elastic IPs. |
+| `ecr` | Yes | ECR repository scan-on-push settings. |
+| `elbv2` | Yes | Application and Network Load Balancers. |
+| `iam` | Yes | Account-level IAM posture. |
+| `kms` | Yes | Customer-managed KMS key rotation. |
+| `rds` | Yes | RDS public access, encryption, and backup posture. |
+| `s3` | Yes | S3 bucket public access, encryption, versioning, and logging. |
+| `tags` | Yes | Required tags on supported resources. |
+| `cloudtrail` | No | Account baseline check for CloudTrail trails. |
+| `config` | No | Account baseline check for AWS Config recorders. |
+| `guardduty` | No | Account baseline check for GuardDuty detectors. |
+| `securityhub` | No | Account baseline check for Security Hub enablement. |
 
 Use `--severity MEDIUM` to show `HIGH` and `MEDIUM` findings. Use `--severity HIGH` to show only
 high-severity findings.
 
 Use `--fail-on HIGH` in CI or scheduled jobs when high-severity findings should fail the run.
 
+## Slack notifications
+
+Use `--notify-on` with a Slack incoming webhook when scheduled scans should notify a channel:
+
+```bash
+aws-security-auditor scan \
+  --profile audit \
+  --notify-on HIGH \
+  --slack-webhook-url "$SLACK_WEBHOOK_URL"
+```
+
+The webhook can also come from the environment:
+
+```bash
+export AWS_SECURITY_AUDITOR_SLACK_WEBHOOK_URL="$SLACK_WEBHOOK_URL"
+aws-security-auditor scan --profile audit --notify-on HIGH
+```
+
+| Setting | Behavior |
+| --- | --- |
+| `--notify-on HIGH` | Notify only when at least one `HIGH` finding exists. |
+| `--notify-on MEDIUM` | Notify when `HIGH` or `MEDIUM` findings exist. |
+| `--notify-on LOW` | Notify when any finding exists. |
+| Slack delivery failure | Prints a warning but does not change the scan exit code. |
+| `--fail-on` | Still controls the command exit code independently from Slack. |
+
+The webhook URL is never printed by the tool.
+
+## Hygiene vs baseline checks
+
+| Check type | Default | Examples |
+| --- | --- | --- |
+| Resource hygiene | Yes | Public exposure, weak IAM posture, missing encryption, missing backups, unused network resources, required tag coverage. |
+| Account baseline | No | CloudTrail, AWS Config, GuardDuty, Security Hub. |
+
+Account baseline services are available when explicitly selected:
+
+```bash
+aws-security-auditor scan --services cloudtrail,config,guardduty,securityhub
+```
+
+CloudTrail, AWS Config, GuardDuty, and Security Hub are important account setup controls, but
+their absence is treated as a baseline/setup gap rather than a default resource hygiene finding.
+
+Tags are used for governance and can later help tune severity or context, but missing tags must
+not hide security exposure. Public access, IAM risk, public snapshots, and similar direct risks
+are evaluated from AWS resource configuration whether tags exist or not.
+
 ## Authentication
 
 Supported authentication:
 
-- default boto3 credential chain
-- named AWS profile
-- optional STS AssumeRole
+| Method | How to use it |
+| --- | --- |
+| Default boto3 credential chain | Run without `--profile` or `--role-arn`. |
+| Named AWS profile | Pass `--profile PROFILE`. |
+| STS AssumeRole | Pass `--role-arn ROLE_ARN`; add `--external-id` when required. |
 
 Recommended approach: use a dedicated read-only role.
 
@@ -125,33 +192,35 @@ profile or assumed role, and region count. It never prints credentials, tokens, 
 
 Severity meanings:
 
-- `HIGH`: likely security exposure requiring prompt review
-- `MEDIUM`: cost, resilience, or exposure issue worth fixing
-- `LOW`: governance or security posture improvement
+| Severity | Meaning |
+| --- | --- |
+| `HIGH` | Likely security exposure requiring prompt review. |
+| `MEDIUM` | Cost, resilience, or exposure issue worth fixing. |
+| `LOW` | Governance or security posture improvement. |
 
 Implemented checks:
 
-- EC2 security groups open to the world for SSH, RDP, HTTP, HTTPS, database ports, all ports, or other ports
-- default security groups with public ingress
-- unused Elastic IP addresses
-- unattached or unencrypted EBS volumes, and disabled EBS encryption by default
-- old account-owned EBS snapshots
-- public account-owned AMIs and public EBS snapshots
-- public, unencrypted, under-backed-up RDS instances
-- S3 public ACL/policy, public access block, encryption, versioning, and access logging
-- IAM root MFA, root access keys, password policy, old or unused access keys, console users without MFA, direct inline user policies
-- CloudTrail trails, AWS Config recorders, GuardDuty detectors, and Security Hub enablement
-- internet-facing Application/Network Load Balancers
-- ECR scan-on-push settings
-- KMS key rotation for eligible customer-managed keys
-- missing required tags on EC2 instances, EBS volumes, and RDS instances
+| Area | Checks |
+| --- | --- |
+| EC2 security groups | Public ingress for SSH, RDP, HTTP, HTTPS, database ports, all ports, and other ports; default security groups with public ingress. |
+| EC2 capacity and images | Unused Elastic IPs, unattached or unencrypted EBS volumes, disabled EBS encryption by default, old account-owned EBS snapshots, public account-owned AMIs, public EBS snapshots. |
+| RDS | Public, unencrypted, or under-backed-up database instances. |
+| S3 | Public ACL/policy, Public Access Block, encryption, versioning, and access logging. |
+| IAM | Root MFA, root access keys, password policy, old or unused access keys, console users without MFA, direct inline user policies. |
+| Load balancing | Internet-facing Application and Network Load Balancers. |
+| ECR | Scan-on-push settings. |
+| KMS | Key rotation for eligible customer-managed keys. |
+| Tags | Missing required tags on EC2 instances, EBS volumes, and RDS instances. |
+| Baseline services | CloudTrail trails, AWS Config recorders, GuardDuty detectors, and Security Hub enablement when explicitly selected. |
 
 ## How this differs from AWS native services
 
-- CloudTrail records AWS API activity and is used for audit and incident investigation.
-- AWS Config records resource configuration history and evaluates compliance rules continuously.
-- Security Hub aggregates security findings and posture controls across accounts and services.
-- This tool gives a fast read-only snapshot without enabling a managed service first.
+| Service or tool | Role |
+| --- | --- |
+| CloudTrail | Records AWS API activity for audit and incident investigation. |
+| AWS Config | Records resource configuration history and evaluates compliance rules continuously. |
+| Security Hub | Aggregates security findings and posture controls across accounts and services. |
+| aws-security-auditor | Provides a fast read-only snapshot without enabling a managed service first. |
 
 ## Example Output
 
@@ -190,20 +259,21 @@ or cleanup flag.
 
 ## Limitations
 
-- It checks common security posture issues only.
-- It does not inspect S3 objects or object contents.
-- It does not remediate findings.
-- IAM direct managed policy attachment checks are intentionally omitted because the AWS API name
-  contains `Attach`, which this project blocks by policy.
-- API errors are reported and the scan continues where possible.
+| Limitation | Detail |
+| --- | --- |
+| Coverage | It checks common security posture issues only. |
+| S3 object contents | It does not inspect S3 objects or object contents. |
+| Remediation | It does not remediate findings. |
+| IAM managed policy attachments | IAM direct managed policy attachment checks are intentionally omitted because the AWS API name contains `Attach`, which this project blocks by policy. |
+| API errors | API errors are reported and the scan continues where possible. |
 
 ## Development
 
-```bash
-ruff check .
-mypy src
-pytest
-```
+| Command | Purpose |
+| --- | --- |
+| `ruff check .` | Lint the codebase. |
+| `mypy src` | Type-check source code. |
+| `pytest` | Run tests. |
 
 CI runs those commands without AWS credentials and without integration tests against a real account.
 

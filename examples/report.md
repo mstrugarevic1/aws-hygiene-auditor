@@ -1,8 +1,10 @@
 # AWS Security Auditor Report
 
-- Account: `123456789012`
-- ARN: `arn:aws:iam::123456789012:role/AwsSecurityAuditorReadOnly`
-- Regions scanned: 2
+| Field | Value |
+| --- | --- |
+| Account | `123456789012` |
+| ARN | `arn:aws:iam::123456789012:role/AwsSecurityAuditorReadOnly` |
+| Regions scanned | 2 |
 
 | Severity | Region | Service | Resource | Finding |
 | --- | --- | --- | --- | --- |
@@ -10,11 +12,13 @@
 
 ## Summary
 
-- Scanned regions: 2
-- Checks executed: 12
-- Resources inspected: 42
-- HIGH: 1
-- MEDIUM: 0
-- LOW: 0
-- Errors: 0
-- Duration: 3.2s
+| Metric | Value |
+| --- | --- |
+| Scanned regions | 2 |
+| Checks executed | 12 |
+| Resources inspected | 42 |
+| HIGH | 1 |
+| MEDIUM | 0 |
+| LOW | 0 |
+| Errors | 0 |
+| Duration | 3.2s |

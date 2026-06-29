@@ -5,6 +5,17 @@ from dataclasses import dataclass
 from botocore.config import Config
 
 DEFAULT_REQUIRED_TAGS = ("Owner", "Environment", "CostCenter")
+BASELINE_SERVICES = ("cloudtrail", "config", "guardduty", "securityhub")
+DEFAULT_SERVICES = (
+    "ec2",
+    "ecr",
+    "elbv2",
+    "iam",
+    "kms",
+    "rds",
+    "s3",
+    "tags",
+)
 ALL_SERVICES = (
     "cloudtrail",
     "config",
