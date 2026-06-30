@@ -251,7 +251,7 @@ managed services to be enabled first.
 +----------+--------------------------+---------+-----------+-------------------------------+
 | HIGH     | global                   | IAM     | root      | Root account MFA is disabled  |
 | HIGH     | eu-central-1 (Frankfurt) | EC2     | sg-012345 | SSH open to the world         |
-| MEDIUM   | eu-west-1 (Ireland)      | RDS     | prod-db   | Deletion protection disabled   |
+| MEDIUM   | eu-west-1 (Ireland)      | RDS     | prod-db   | Deletion protection disabled  |
 | LOW      | us-east-1 (N. Virginia)  | ECR     | app       | ECR scan on push is disabled  |
 +----------+--------------------------+---------+-----------+-------------------------------+
 
